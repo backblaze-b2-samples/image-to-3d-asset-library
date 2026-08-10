@@ -75,3 +75,10 @@ Low-severity polish, left for a follow-up; none blocks the core flow.
 | Custom `FileNotFoundError` shadowed the built-in | Renamed to `FileNotFoundServiceError` |
 | Dropzone accepted any file type client-side | `accept` allow-list mirroring backend `ALLOWED_TYPES` (tested for drift) |
 | No test harness for feature specs | pytest suite across upload, files, activity, errors, validation, rate limit, pagination |
+
+## 2026-08-10 — verify
+
+Nitpicks surfaced by the 3-lens UI verification (main feature PASS; logged here, not looped on):
+
+- Asset detail (`/library/[id]`) — generation shows an animated spinner + stage message ("Reconstructing mesh") but no determinate/percentage progress bar; warm-weight runs are ~5s so impact is low → add a determinate progress affordance if long CPU-only reconstructions become common (`.local/verify/B/05-running-mesh.png`).
+- Asset detail (`/library/[id]`) & library grid — the write-amp panel / grid card report "8 B2 objects" while the "B2 artifacts (N)" table header reads "(7)"; the 8th object is `manifest.json` (not a downloadable artifact) → reconcile the two counts or relabel the table "downloadable artifacts" (`.local/verify/B/07-detail-complete.png`).
