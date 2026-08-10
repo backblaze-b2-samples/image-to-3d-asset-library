@@ -1,0 +1,12 @@
+# OPTIONAL — Hunyuan3D engine extras. GPU (CUDA) host only.
+#
+# NOT installed by `pnpm run setup` and NOT part of requirements.lock or CI: the
+# default install stays CPU-only. Install these on a CUDA machine to enable the
+# optional "Hunyuan3D (GPU only)" engine (see the README engine matrix):
+#
+#   services/api/.venv/bin/pip install -r services/api/requirements-hunyuan3d.txt
+#
+# The engine adapter (app/repo/engines/hunyuan3d.py) lazy-imports this pipeline
+# and raises a friendly error on a CPU host or when the extras are absent — it
+# never fabricates output. Pin against your CUDA/torch build when you install.
+hunyuan3d-2 ; platform_system == "Linux"

@@ -4,19 +4,27 @@
 ## Components
 
 - **apps/web/** — Next.js 16 frontend (App Router, Tailwind v4, shadcn/ui)
-  - Dashboard with stats, upload chart, recent uploads
-  - File upload with drag-and-drop, progress tracking
-  - File browser with preview, download, delete
+  - Generate (`/generate`) — upload a source image, choose an engine + settings
+  - Library (`/library`, `/library/[id]`) — asset grid + detail with an
+    in-browser 3D viewer (`@google/model-viewer`), artifact table, and
+    write-amplification breakdown
+  - Dashboard (`/`) — asset-library metrics (objects written, storage,
+    amplification ratio, storage-by-artifact, recent generations)
+  - Files (`/files`) + Upload (`/upload`) — the kept full-bucket explorer +
+    direct-to-B2 uploader
   - Dark mode via `next-themes`
 - **services/api/** — FastAPI backend (layered architecture)
-  - REST API for file upload, listing, deletion
-  - B2 S3 integration via boto3
-  - File metadata extraction (images, PDFs)
-  - Health check endpoint with B2 connectivity verification
-  - Structured JSON logging with request tracing
-  - Prometheus-format metrics endpoint
+  - Image → 3D generation via `repo/engines/` adapters (TripoSR default,
+    Hunyuan3D GPU-only, procedural demo); heavy ML imports are lazy
+  - The B2 bucket is the versioned, content-addressed 3D asset library
+    (`library/<hash>/manifest.json` is the durable record — no database)
+  - Kept file upload/listing/deletion, metadata extraction, `/health`,
+    `/metrics`, structured JSON logging
+  - B2 S3 integration via boto3 (S3-compatible API only)
+- **services/api/vendor/triposr/** — vendored MIT TripoSR model code, OUTSIDE
+  `app/`, patched for CPU (PyMCubes, no OpenGL bake) — see its PROVENANCE.md
 - **packages/shared/** — TypeScript type definitions
-  - Mirrors Pydantic models from the API
+  - Mirrors Pydantic models from the API (including the `Asset` models)
   - Consumed by `apps/web/` as workspace dependency
 
 ## Backend Layering
@@ -49,12 +57,15 @@ runtime/   FastAPI routes — calls service, never repo directly
 services/api/
   main.py                  App entrypoint, middleware, router registration
   app/
-    types/                 Pydantic models (FileMetadata, UploadStats, etc.)
+    types/                 Pydantic models (asset.py, files.py, upload.py, …)
     config/                Settings loaded from environment
-    repo/                  B2 S3 client (data access layer)
-    service/               Business logic (upload, files, metadata)
-    runtime/               FastAPI route handlers
-  tests/                   pytest tests (structural + integration)
+    repo/                  Data access: b2_client, asset_store, manifest, jobs
+      engines/             Mesh-generation adapters (base, device, render,
+                           triposr, hunyuan3d, procedural) — lazy ML imports
+    service/               Business logic (assets, asset_stats, upload, files)
+    runtime/               FastAPI route handlers (assets, files, upload, …)
+  vendor/triposr/          Vendored MIT TripoSR model code (outside app/)
+  tests/                   pytest tests (structural + integration + hermetic assets)
 ```
 
 ## Boundary Invariants
@@ -89,14 +100,20 @@ External provisioning and deployment remain explicit user-approved actions.
 
 ## Data Stores
 
-- **Backblaze B2** — object storage (S3-compatible API)
-  - All uploaded files stored in a single bucket
-  - File listing and metadata via S3 `list_objects_v2` / `head_object`
-  - No application database — B2 is the sole data store
+- **Backblaze B2** — object storage (S3-compatible API), the sole data store
+  - Source uploads land under `uploads/` (kept direct-upload flow)
+  - The 3D asset library lives under `library/<content-hash>/`:
+    `manifest.json` (the durable `Asset` record), `source.<ext>`, `mesh.glb`,
+    `mesh.obj`, `texture_<res>.png…`, `preview.png`
+  - Listing/stats via `list_objects_v2`; asset delete via prefix-scoped
+    `delete_objects`; no application database
 
 ## External Services
 
-- **Backblaze B2 S3 API** — file storage, retrieval, deletion, presigned URLs
+- **Backblaze B2 S3 API** — object storage, retrieval, deletion, presigned URLs
+- **Hugging Face Hub** — one-time download of the public `stabilityai/TripoSR`
+  weights on the first real TripoSR run (cached; never at install/CI). No model
+  provider API and no second key — B2 credentials only.
 
 ## Trust Boundaries
 
@@ -108,10 +125,23 @@ See [docs/SECURITY.md](docs/SECURITY.md) for full security documentation.
 
 ## Data Flows
 
-- **Upload**: Browser -> `POST /upload/presign` (API validates the declared file + signs a PUT) -> Browser PUTs bytes **directly to B2** -> `POST /upload/verify` (API HEADs + Range-sniffs the stored object) -> response
-- **List**: Browser -> `GET /files` -> service calls repo -> returns file list
-- **Download**: Browser -> `GET /files/{key}/download` -> service validates key -> repo generates presigned URL -> browser downloads
-- **Delete**: Browser -> `DELETE /files/{key}` -> service validates key -> repo deletes from B2
+- **Generate**: Browser uploads the source via the presigned PUT flow, then
+  `POST /assets` (`input_key`, engine, settings) -> service hashes the input
+  (sha256 → asset id, dedup), writes a `pending` manifest, and submits the run
+  to the single-worker registry (`repo/jobs.py`, off the event loop) -> the
+  engine reconstructs the mesh -> service writes artifacts to `library/<id>/`
+  and finalizes the manifest `complete`. The detail page polls
+  `GET /assets/{id}` (manifest overlaid with live progress).
+- **Browse/read**: `GET /assets` (library grid; preview presigned) and
+  `GET /assets/{id}` (detail; every artifact presigned inline for the viewer).
+- **Serve mesh**: model-viewer fetches the GLB from a presigned inline B2 URL
+  (bucket CORS must allow GET/HEAD from the web origin).
+- **Edit / Delete / Regenerate**: `PATCH /assets/{id}` (name/tags → manifest),
+  `DELETE /assets/{id}` (prefix-scoped `delete_objects` of `library/<id>/`),
+  `POST /assets/{id}/regenerate` (re-run; bumps version).
+- **Stats**: `GET /assets/stats` aggregates write-amplification for the dashboard.
+- **Upload / List / Download / Delete (files)**: the kept starter flows over
+  the full bucket (`/upload`, `/files`).
 
 ## Observability
 
@@ -134,22 +164,25 @@ silently drift from FastAPI. `GET /metrics` is intentionally server-only.
 
 ## Canonical Files
 
-- Layered API handler: `services/api/app/runtime/upload.py`
-- Service orchestration: `services/api/app/service/upload.py`
-- B2 data access (repo layer): `services/api/app/repo/b2_client.py`
-- Pydantic models: `services/api/app/types/` (`files.py`, `upload.py`, `stats.py`, `formatting.py`)
+- Asset routes: `services/api/app/runtime/assets.py`
+- Asset orchestration: `services/api/app/service/assets.py` (+ `asset_stats.py`, `assets_hash.py`)
+- Engine adapters: `services/api/app/repo/engines/` (`base`, `device`, `render`, `triposr`, `hunyuan3d`, `procedural`)
+- B2 asset access (repo layer): `services/api/app/repo/asset_store.py`, `manifest.py`, `jobs.py`
+- Vendored TripoSR model: `services/api/vendor/triposr/` (+ PROVENANCE.md)
+- Pydantic models: `services/api/app/types/` (`asset.py`, `files.py`, `upload.py`, `stats.py`)
 - Config (pydantic-settings): `services/api/app/config/settings.py`
-- Structural tests: `services/api/tests/test_structure.py`
+- Structural tests: `services/api/tests/test_structure.py`; hermetic asset tests: `tests/test_assets.py`
 - OpenAPI contract: `docs/api/openapi.json`
-- OpenAPI exporter: `services/api/scripts/export_openapi.py`
-- Frontend API client: `apps/web/src/lib/api-client.ts`
+- Frontend API client + hooks: `apps/web/src/lib/api-client.ts`, `queries.ts`
 - Shared TypeScript types: `packages/shared/src/types.ts`
 
 ## Core Features
 
+- [Image → 3D Generation](docs/features/asset-generation.md)
+- [3D Asset Library](docs/features/asset-library.md)
+- [Dashboard](docs/features/dashboard.md)
 - [File Upload](docs/features/file-upload.md)
 - [File Browser](docs/features/file-browser.md)
-- [Dashboard](docs/features/dashboard.md)
 - [Metadata Extraction](docs/features/metadata-extraction.md)
 
 ## References

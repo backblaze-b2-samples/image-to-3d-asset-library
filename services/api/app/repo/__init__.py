@@ -1,3 +1,6 @@
+# Asset-library adapters (image -> 3D). Grouped separately so the file browser
+# imports stay untouched.
+from app.repo import asset_store, engines, jobs, manifest
 from app.repo.b2_client import (
     check_connectivity,
     delete_file,
@@ -17,8 +20,10 @@ from app.repo.b2_upload import (
 from app.repo.counter import get_download_count, increment_download_count
 
 __all__ = [
+    "asset_store",
     "check_connectivity",
     "delete_file",
+    "engines",
     "generate_presigned_upload",
     "get_download_count",
     "get_file_metadata",
@@ -28,7 +33,9 @@ __all__ = [
     "get_upload_stats",
     "increment_download_count",
     "invalidate_listing",
+    "jobs",
     "list_files",
+    "manifest",
     "prewarm_listing",
     "upload_file",
 ]

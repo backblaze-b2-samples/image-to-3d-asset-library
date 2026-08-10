@@ -125,7 +125,7 @@ with a concurrently held `0.0.0.0` bind and would report a free port as busy.
 - Frontend typecheck: `pnpm typecheck`
 - Frontend lint: `pnpm lint`
 - Backend lint: `pnpm lint:api`
-- E2E: `pnpm test:e2e` (run `pnpm --filter @vibe-coding-starter-kit/web exec playwright install chromium` once first)
+- E2E: `pnpm test:e2e` (run `pnpm --filter @image-to-3d-asset-library/web exec playwright install chromium` once first)
 
 ### Pre-commit
 
@@ -240,6 +240,27 @@ notice. Skipped checks are never counted as passes and never fail the run.
 Example/template env files must stay trackable anywhere in the tree;
 `apps/web/.gitignore` overrides the root one for `apps/web/**`, so its negations
 live there too.
+
+### 3D generation engines
+
+The default install is **CPU-only** and downloads no model weights: it carries
+`torch` (CPU wheel), `trimesh`, `PyMCubes`, `transformers`, `huggingface_hub`,
+`matplotlib`, `rembg` + `onnxruntime`, etc. — but **no** `torchmcubes`,
+`moderngl`, `xatlas`, or CUDA rasterizers. All heavy imports are lazy, inside
+`app/repo/engines/*.generate()`, and the hermetic tests use a fake engine, so
+`pnpm run setup`, `pnpm verify`, and CI never load a model or download weights.
+
+- **TripoSR (default).** The first *real* generation downloads the public
+  `stabilityai/TripoSR` weights (~1.6 GB) from the Hugging Face Hub and caches
+  them under `~/.cache/huggingface`. Device is auto-detected CUDA → MPS → CPU;
+  set `GENERATION_DEVICE=cpu|cuda|mps` to force one. The vendored model lives in
+  `services/api/vendor/triposr/` (outside `app/`, excluded from ruff and the
+  structural test) — see its `PROVENANCE.md` for the two local patches.
+- **Hunyuan3D (optional, GPU only).** Not in `requirements.lock`. On a CUDA host
+  install the extras with
+  `services/api/.venv/bin/pip install -r services/api/requirements-hunyuan3d.txt`.
+  On a CPU host the engine raises a friendly error instead of running.
+- **Demo (procedural).** No ML, no download — a good zero-friction first run.
 
 ### Non-live verification
 

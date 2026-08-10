@@ -1,7 +1,40 @@
-<!-- last_verified: 2026-08-06 -->
+<!-- last_verified: 2026-08-10 -->
 # App Workflows
 
-User journeys inside the application.
+User journeys inside the application. The primary journey is
+**generate → store → browse**.
+
+## Generate a 3D Asset (primary)
+
+- User navigates to `/generate`
+- Drops or selects a single source image; it uploads directly to B2 (presigned
+  PUT) and shows an "Uploading to B2…" state, then "Ready: uploads/<name>"
+- User picks an **engine** (Select: TripoSR default / Hunyuan3D GPU / Demo
+  procedural), a **texture resolution** (RadioGroup: 2048 / 1024 / 512), and
+  whether to **remove the background** (Switch, on by default). Each control has
+  a plain-language hint; safe defaults are pre-selected (no autofill button)
+- Submitting `POST /assets` hashes the image (sha256 → asset id) and **dedups**
+  a matching finished asset, or starts a new generation and routes to the asset
+  detail page
+- The detail page polls while the run is `pending`/`running`, then shows the
+  in-browser 3D viewer, artifacts, and write-amplification breakdown
+- See: [Image → 3D Generation](features/asset-generation.md)
+
+## Browse the Asset Library
+
+- User navigates to `/library` — a grid of generated assets scoped to the
+  `library/` prefix (distinct from the full-bucket `/files` explorer)
+- Each card shows the preview render, status badge, engine, object count, size
+- Clicking an asset opens `/library/[id]`: the 3D viewer (GLB via a presigned
+  inline B2 URL), an artifact table with per-file downloads, generation metadata
+  (engine, device, timings), and the write-amplification panel
+- **Edit** (asset detail): rename + edit tags → `PATCH /assets/{id}` (updates the
+  manifest; mesh geometry editing is out of scope)
+- **Delete**: an AlertDialog confirm → `DELETE /assets/{id}` removes the asset's
+  entire `library/<id>/` B2 prefix
+- **Regenerate**: re-runs inference (optionally a different engine/resolution)
+  and bumps the asset version
+- See: [3D Asset Library](features/asset-library.md)
 
 ## Upload Files
 
@@ -34,12 +67,13 @@ User journeys inside the application.
 ## View Dashboard
 
 - User navigates to `/` (home)
-- Three parallel API calls load: stats, recent files, upload activity — all served from one shared bucket listing that the API warms at startup
-- While stats load, the page states it in words above the cards rather than showing silent skeletons
-- Stats cards show: total files, storage used, uploads today, total downloads
-- Upload chart shows last 7 days of upload activity as bar chart
-- Recent uploads table shows last 10 files with filename, size, type, date. Each filename links to that file's preview on `/files` — `/files` teaches "click a file to preview it", so the same gesture here has to answer rather than being inert text
-- Empty state: "No files uploaded yet" messages
+- `GET /assets/stats` + `GET /assets` load via TanStack Query
+- Stat cards show: 3D assets, B2 objects written (with avg per generation),
+  storage used, and the amplification ratio (output bytes ÷ input bytes)
+- The chart shows storage by artifact type (source / mesh / textures / preview)
+- The recent-generations table shows the latest assets with engine, status,
+  object count, and size; each row links to the asset detail page
+- Empty state: "No artifacts yet" / "No generations yet"
 - See: [Dashboard](features/dashboard.md)
 
 ## Change Preferences

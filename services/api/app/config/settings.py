@@ -2,11 +2,41 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    b2_endpoint: str = "https://s3.us-west-004.backblazeb2.com"
-    b2_key_id: str = ""
+    # Standardized B2 credentials (see .env.example) — S3-compatible API only.
+    # The S3 endpoint is DERIVED from the region (see `b2_endpoint`), so there
+    # is one region string and no hand-typed endpoint URL that can drift from it.
+    b2_application_key_id: str = ""
     b2_application_key: str = ""
     b2_bucket_name: str = ""
-    b2_public_url: str = ""
+    # No region default: the endpoint is derived from it, so a baked-in region
+    # would be a hardcoded endpoint. Set B2_REGION in .env (e.g. us-west-004).
+    b2_region: str = ""
+    # Optional: only used to build public object URLs for a public bucket. The
+    # app runs without it (private buckets serve every blob via presigned URLs).
+    b2_public_url_base: str = ""
+
+    # --- Image -> 3D generation -------------------------------------------
+    # Where the app writes source uploads and the generated asset library. The
+    # bucket IS the versioned asset library: one input fans out into many
+    # objects under library/<content-hash>/.
+    library_prefix: str = "library/"
+    # Runtime device for local ML generation. `auto` picks the first available
+    # of CUDA -> Apple MPS -> CPU (see repo/engines/device.py); force one with
+    # cpu|cuda|mps. Never hard-requires a GPU — always falls back to CPU.
+    generation_device: str = "auto"
+    # Default engine + the vendored TripoSR checkpoint (public, no token; the
+    # weights download on the first real run only, never at install/CI).
+    default_engine: str = "triposr"
+    triposr_model_id: str = "stabilityai/TripoSR"
+    # Marching-cubes grid resolution for TripoSR mesh extraction. Higher =
+    # denser mesh + more B2 bytes; 256 is the upstream default.
+    triposr_mc_resolution: int = 256
+    # Default multi-resolution texture/preview map size (a finite UI choice:
+    # 2048 / 1024 / 512). The chosen size plus its mip levels down to 256 are
+    # written to B2 — this fan-out is the write-amplification story.
+    default_texture_resolution: int = 1024
+    # Small square thumbnail rendered for asset cards (dark, single-subject).
+    preview_thumbnail_size: int = 512
 
     api_port: int = 8000
     # Interactive API docs (/docs, /redoc, /openapi.json). On by default for
@@ -70,6 +100,16 @@ class Settings(BaseSettings):
     download_count_file: str = ".data/download_count.json"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @property
+    def b2_endpoint(self) -> str:
+        """S3-compatible endpoint derived from the region.
+
+        The boto3 client in repo/b2_client.py builds its endpoint from this, so
+        the region is the single source of truth and no endpoint URL is
+        hardcoded anywhere.
+        """
+        return f"https://s3.{self.b2_region}.backblazeb2.com"
 
     @property
     def cors_origins(self) -> list[str]:

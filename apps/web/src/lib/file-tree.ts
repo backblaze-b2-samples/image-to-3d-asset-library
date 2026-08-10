@@ -1,4 +1,4 @@
-import type { FileMetadata } from "@vibe-coding-starter-kit/shared";
+import type { FileMetadata } from "@image-to-3d-asset-library/shared";
 
 export interface TreeFolder {
   type: "folder";

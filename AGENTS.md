@@ -13,12 +13,23 @@ This is the authoritative control surface for all coding agents. Read this first
 ```
 apps/web/          Next.js 16 frontend (App Router, Tailwind v4, shadcn/ui)
 services/api/      FastAPI backend (layered: types/config/repo/service/runtime)
+  app/repo/engines/  mesh-generation adapters (TripoSR default, Hunyuan3D, procedural)
+services/api/vendor/ vendored MIT TripoSR model code — OUTSIDE app/ (see PROVENANCE.md)
 packages/shared/   Shared TypeScript types
 docs/              System of record (features, workflows, security, reliability)
 docs/exec-plans/   Execution plans and tech debt tracker
 infra/railway/     Deployment config
 infra/vercel/      Vercel deployment contract
 ```
+
+**Primary domain — Assets (image → 3D).** An `Asset` is one generated 3D model
+plus its B2 artifacts, keyed by the source image's content hash. The domain
+spans `types/asset.py`, `service/assets.py` (+ `asset_stats.py`, `assets_hash.py`),
+`runtime/assets.py`, and the `repo/` adapters `asset_store.py` (B2 objects),
+`manifest.py` (the `library/<id>/manifest.json` record — B2 is the only
+datastore), `jobs.py` (in-memory live-run registry), and `engines/` (the
+mesh-generation "SDK", wrapped in repo/). Frontend surface: `/generate`,
+`/library`, `/library/[id]`, and `components/assets/`. B2 is S3-only via boto3.
 
 ## 2. Building on This Starter Kit
 
@@ -47,6 +58,15 @@ When this repo is used as the foundation for a new app, the following pieces are
 - All external APIs wrapped in `repo/` adapters
 - All request/response data validated at boundary (Pydantic models)
 - No shared mutable state across layers
+- **Lazy ML imports.** `torch`, `rembg`, and the vendored `tsr` package are
+  imported INSIDE `repo/engines/*.generate()` only — never at module top level —
+  so app import and hermetic tests never load heavy ML or download weights. Unit
+  tests use a fake engine; they never run a model.
+- **Local device autodetect.** Generation defaults to CPU and auto-detects
+  CUDA → Apple MPS → CPU (`repo/engines/device.py`); never hard-require a GPU.
+- **Vendored model code is outside `app/`.** The MIT TripoSR source lives in
+  `services/api/vendor/triposr/` so the <300-line structural test (which scans
+  `app/` only) never touches it; ruff excludes `vendor/`. See its PROVENANCE.md.
 
 **Frontend**: shadcn/ui components in `src/components/ui/` are generated — never modify them.
 
@@ -195,6 +215,8 @@ If documentation and implementation conflict, update docs in the same PR. Docume
 | Topic | Location |
 |-------|----------|
 | System layout, data flows, boundaries | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Image → 3D generation (engines, device, dedup, write amp) | [docs/features/asset-generation.md](docs/features/asset-generation.md) |
+| Library explorer + 3D viewer + presigned serving | [docs/features/asset-library.md](docs/features/asset-library.md) |
 | Feature docs | [docs/features/](docs/features/) |
 | User journeys | [docs/app-workflows.md](docs/app-workflows.md) |
 | Engineering workflows and testing | [docs/dev-workflows.md](docs/dev-workflows.md) |

@@ -1,11 +1,17 @@
 import type {
+  Asset,
+  AssetCreateRequest,
+  AssetStats,
+  AssetUpdateRequest,
   DailyUploadCount,
+  EngineInfo,
   FileMetadata,
   FileMetadataDetail,
   FileUploadResponse,
   PresignUploadResponse,
+  RegenerateRequest,
   UploadStats,
-} from "@vibe-coding-starter-kit/shared";
+} from "@image-to-3d-asset-library/shared";
 
 // Single-origin deploys (Vercel `services`: one project serving web + API) put
 // the API under /api on the same origin, so no NEXT_PUBLIC_API_URL is needed —
@@ -17,7 +23,7 @@ export const API_BASE =
   (process.env.NODE_ENV === "production" ? "/api" : "http://localhost:8000");
 
 type ApiClientRoute = {
-  method: "delete" | "get" | "post";
+  method: "delete" | "get" | "patch" | "post";
   path: string;
 };
 
@@ -41,7 +47,20 @@ export const API_CLIENT_ROUTES = {
   // payload ceiling no longer caps upload size.
   uploadPresign: { method: "post", path: "/upload/presign" },
   uploadVerify: { method: "post", path: "/upload/verify" },
+  // Image -> 3D asset library.
+  assets: { method: "get", path: "/assets" },
+  assetStats: { method: "get", path: "/assets/stats" },
+  assetEngines: { method: "get", path: "/assets/engines" },
+  assetCreate: { method: "post", path: "/assets" },
+  asset: { method: "get", path: "/assets/{asset_id}" },
+  assetUpdate: { method: "patch", path: "/assets/{asset_id}" },
+  assetDelete: { method: "delete", path: "/assets/{asset_id}" },
+  assetRegenerate: { method: "post", path: "/assets/{asset_id}/regenerate" },
 } as const satisfies Record<string, ApiClientRoute>;
+
+function assetPath(template: string, id: string): string {
+  return template.replace("{asset_id}", encodeURIComponent(id));
+}
 
 /** Typed API error with HTTP status code for caller-side branching. */
 export class ApiError extends Error {
@@ -324,4 +343,56 @@ function putFileToStorage(
     }
     xhr.send(file);
   });
+}
+
+// --- Image -> 3D asset library ------------------------------------------
+
+export async function getAssets() {
+  return apiFetch<Asset[]>(API_CLIENT_ROUTES.assets.path);
+}
+
+export async function getAssetStats() {
+  return apiFetch<AssetStats>(API_CLIENT_ROUTES.assetStats.path);
+}
+
+export async function getEngines() {
+  return apiFetch<EngineInfo[]>(API_CLIENT_ROUTES.assetEngines.path);
+}
+
+export async function getAsset(id: string) {
+  return apiFetch<Asset>(assetPath(API_CLIENT_ROUTES.asset.path, id));
+}
+
+export async function createAsset(req: AssetCreateRequest) {
+  return apiFetch<Asset>(API_CLIENT_ROUTES.assetCreate.path, {
+    method: API_CLIENT_ROUTES.assetCreate.method.toUpperCase(),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+}
+
+export async function updateAsset(id: string, req: AssetUpdateRequest) {
+  return apiFetch<Asset>(assetPath(API_CLIENT_ROUTES.assetUpdate.path, id), {
+    method: API_CLIENT_ROUTES.assetUpdate.method.toUpperCase(),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+}
+
+export async function deleteAsset(id: string) {
+  return apiFetch<{ deleted: boolean; id: string; objects_removed: number }>(
+    assetPath(API_CLIENT_ROUTES.assetDelete.path, id),
+    { method: API_CLIENT_ROUTES.assetDelete.method.toUpperCase() }
+  );
+}
+
+export async function regenerateAsset(id: string, req: RegenerateRequest) {
+  return apiFetch<Asset>(
+    assetPath(API_CLIENT_ROUTES.assetRegenerate.path, id),
+    {
+      method: API_CLIENT_ROUTES.assetRegenerate.method.toUpperCase(),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    }
+  );
 }

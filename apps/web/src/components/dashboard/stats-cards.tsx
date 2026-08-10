@@ -1,18 +1,15 @@
 "use client";
 
-import { FileIcon, HardDrive, Upload, Download } from "lucide-react";
+import { Boxes, Database, HardDrive, Layers } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { LoadingNotice } from "@/components/common/loading-notice";
-import { useFileStats } from "@/lib/queries";
+import { useAssetStats } from "@/lib/queries";
 
 export function StatsCards() {
-  const { data: stats, isLoading, error, refetch } = useFileStats();
+  const { data: stats, isLoading, error, refetch } = useAssetStats();
 
-  // Surface fetch failures inline rather than rendering "0 files / 0 B" —
-  // that lies to the user about the bucket state when really the API is
-  // just unreachable.
   if (error) {
     return (
       <Card>
@@ -24,20 +21,35 @@ export function StatsCards() {
   }
 
   const cards = [
-    { title: "Total Files", value: stats?.total_files ?? 0, icon: FileIcon },
-    { title: "Storage Used", value: stats?.total_size_human ?? "0 B", icon: HardDrive },
-    { title: "Uploads Today", value: stats?.uploads_today ?? 0, icon: Upload },
-    { title: "Total Downloads", value: stats?.total_downloads ?? 0, icon: Download },
+    {
+      title: "3D Assets",
+      value: stats?.total_assets ?? 0,
+      caption: "generated meshes",
+      icon: Boxes,
+    },
+    {
+      title: "B2 Objects Written",
+      value: stats?.total_objects ?? 0,
+      caption: `${stats?.avg_objects_per_generation ?? 0} avg per generation`,
+      icon: Database,
+    },
+    {
+      title: "Storage Used",
+      value: stats?.total_bytes_human ?? "0 B",
+      caption: `${stats?.output_bytes_human ?? "0 B"} of output`,
+      icon: HardDrive,
+    },
+    {
+      title: "Amplification",
+      value: `${(stats?.amplification_ratio ?? 0).toFixed(2)}×`,
+      caption: "output bytes ÷ input bytes",
+      icon: Layers,
+    },
   ];
 
   return (
     <>
-      {/* Stats need a full bucket listing, which measured ~8s on a 16k-object
-          bucket. Four blank skeleton cards said nothing about that; this states
-          it in words and escalates if the wait keeps going. */}
-      {isLoading && (
-        <LoadingNotice className="mb-3" subject="bucket stats" />
-      )}
+      {isLoading && <LoadingNotice className="mb-3" subject="asset stats" />}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((card, i) => (
           <Card
@@ -56,7 +68,12 @@ export function StatsCards() {
               {isLoading ? (
                 <Skeleton className="h-8 w-24" />
               ) : (
-                <div className="stat-value">{card.value}</div>
+                <>
+                  <div className="stat-value">{card.value}</div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {card.caption}
+                  </p>
+                </>
               )}
             </CardContent>
           </Card>

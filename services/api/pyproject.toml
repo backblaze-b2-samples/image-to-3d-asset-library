@@ -1,6 +1,11 @@
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+# Vendored, upstream TripoSR model code (MIT) lives here verbatim except for the
+# two documented local patches (see vendor/triposr/PROVENANCE.md). It is not
+# authored app code, so it is exempt from our lint + the <300-line structural
+# test (which only scans app/). Do not reformat it.
+extend-exclude = ["vendor"]
 
 [tool.ruff.lint]
 select = [

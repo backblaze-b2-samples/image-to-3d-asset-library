@@ -12,6 +12,26 @@ boto3>=1.35.0
 Pillow>=11.0.0
 PyPDF2>=3.0.0
 
+# --- Image -> 3D generation (default engine: TripoSR, local, CPU-installable) ---
+# CPU wheels only: NO CUDA/torchmcubes/moderngl/xatlas/pyglet and NO OpenGL, so
+# this installs and imports cleanly on macOS arm64 CPU. All heavy imports are
+# lazy (inside engines' generate()), so importing the app / running CI never
+# loads them or downloads weights. Pinned windows on purpose — an unbounded
+# torch/transformers/hf pin is a known false-green that breaks a fresh clone.
+torch>=2.3,<2.9              # CPU wheel; MPS/CUDA auto-detected at runtime
+numpy>=1.26,<2              # ML-ecosystem compat (see prior samples)
+trimesh>=4.0,<5             # mesh construction + GLB/OBJ export
+PyMCubes>=0.1.4            # `mcubes`: pure-CPU marching cubes (replaces torchmcubes)
+transformers>=4.35,<5      # TripoSR image tokenizer (DINO ViT); lazy-imported
+huggingface_hub>=0.24,<1   # fetch the public TripoSR weights on first run
+safetensors>=0.4,<1
+einops>=0.7,<1
+omegaconf>=2.3,<3
+imageio>=2.34,<3           # imported by the vendored tsr utils
+matplotlib>=3.8,<4         # headless (Agg) preview render — no OpenGL
+rembg>=2.0.56,<3           # background removal
+onnxruntime>=1.17,<2       # rembg's inference runtime (an optional extra since rembg 2.0.56)
+
 # Dev / quality
 ruff>=0.8.0
 pytest>=8.0.0

@@ -25,7 +25,7 @@ import {
   uploadStatusLabel,
   type UploadItem,
 } from "@/lib/upload-status";
-import type { FileStatus } from "@vibe-coding-starter-kit/shared";
+import type { FileStatus } from "@image-to-3d-asset-library/shared";
 
 export type { UploadItem };
 

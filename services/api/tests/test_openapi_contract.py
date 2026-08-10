@@ -34,11 +34,13 @@ def test_openapi_metadata_uses_canonical_local_api_identity():
     schema = app.openapi()
 
     assert schema["info"] == {
-        "title": "Vibe Coding Starter Kit API",
+        "title": "Image to 3D Asset Library API",
         "description": (
-            "Local API for the Vibe Coding Starter Kit template, providing file "
-            "upload and management backed by Backblaze B2. This contract "
-            "documents the template's local API, not a hosted public endpoint."
+            "Local API for Image to 3D Asset Library: reconstruct a 3D mesh, "
+            "texture maps, and a preview render from a single source image with "
+            "a local open-source engine (TripoSR), and store every artifact in "
+            "Backblaze B2 as a versioned, content-addressed 3D asset library. "
+            "This contract documents the local API, not a hosted public endpoint."
         ),
         "version": "0.1.0",
     }

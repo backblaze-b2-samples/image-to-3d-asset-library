@@ -8,19 +8,31 @@ import {
 } from "@tanstack/react-query";
 import {
   ApiError,
+  createAsset,
+  deleteAsset,
   deleteFile,
+  getAsset,
+  getAssets,
+  getAssetStats,
   getDownloadUrl,
+  getEngines,
   getFileDetail,
   getFiles,
   getFileStats,
   getHealth,
   getPreviewUrl,
   getUploadActivity,
+  regenerateAsset,
+  updateAsset,
 } from "@/lib/api-client";
 import type {
+  Asset,
+  AssetCreateRequest,
+  AssetUpdateRequest,
   FileMetadata,
   FileMetadataDetail,
-} from "@vibe-coding-starter-kit/shared";
+  RegenerateRequest,
+} from "@image-to-3d-asset-library/shared";
 
 // Single source of truth for query keys. Keep these tightly scoped so that
 // invalidating "files" doesn't blow away unrelated caches, and so an IDE
@@ -35,6 +47,10 @@ export const qk = {
   preview: (key: string) => [...qk.all, "preview", key] as const,
   detail: (key: string) => [...qk.all, "detail", key] as const,
   health: () => [...qk.all, "health"] as const,
+  assets: () => [...qk.all, "assets"] as const,
+  asset: (id: string) => [...qk.all, "asset", id] as const,
+  assetStats: () => [...qk.all, "assetStats"] as const,
+  engines: () => [...qk.all, "engines"] as const,
 };
 
 export type Health = Awaited<ReturnType<typeof getHealth>>;
@@ -167,5 +183,91 @@ export function useDeleteFile() {
       dropDeletedFileFromCache(qc, fileKey);
       qc.invalidateQueries({ queryKey: qk.all });
     },
+  });
+}
+
+// --- Image -> 3D asset library ------------------------------------------
+
+/** The whole library grid (each asset carries its presigned preview URL). */
+export function useAssets() {
+  return useQuery<Asset[], ApiError>({
+    queryKey: qk.assets(),
+    queryFn: getAssets,
+  });
+}
+
+/**
+ * One asset's detail. While it is still generating (`pending`/`running`) the
+ * query polls every 2s so the detail page advances to `complete`/`failed`
+ * without a manual refresh; polling stops once terminal.
+ */
+export function useAsset(id: string | undefined) {
+  return useQuery<Asset, ApiError>({
+    queryKey: qk.asset(id ?? ""),
+    queryFn: () => getAsset(id as string),
+    enabled: !!id,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "pending" || status === "running" ? 2000 : false;
+    },
+  });
+}
+
+export function useAssetStats() {
+  return useQuery({ queryKey: qk.assetStats(), queryFn: getAssetStats });
+}
+
+/** Engine catalog (labels, GPU requirement, availability) for the create form.
+ *  Rarely changes, so it stays fresh for the session. */
+export function useEngines() {
+  return useQuery({
+    queryKey: qk.engines(),
+    queryFn: getEngines,
+    staleTime: Infinity,
+  });
+}
+
+function useAssetInvalidation() {
+  const qc = useQueryClient();
+  return (id?: string) => {
+    qc.invalidateQueries({ queryKey: qk.assets() });
+    qc.invalidateQueries({ queryKey: qk.assetStats() });
+    if (id) qc.invalidateQueries({ queryKey: qk.asset(id) });
+  };
+}
+
+export function useCreateAsset() {
+  const invalidate = useAssetInvalidation();
+  return useMutation<Asset, ApiError, AssetCreateRequest>({
+    mutationFn: (req) => createAsset(req),
+    onSuccess: (asset) => invalidate(asset.id),
+  });
+}
+
+export function useUpdateAsset(id: string) {
+  const invalidate = useAssetInvalidation();
+  return useMutation<Asset, ApiError, AssetUpdateRequest>({
+    mutationFn: (req) => updateAsset(id, req),
+    onSuccess: () => invalidate(id),
+  });
+}
+
+export function useDeleteAsset() {
+  const invalidate = useAssetInvalidation();
+  return useMutation<
+    { deleted: boolean; id: string; objects_removed: number },
+    ApiError,
+    string
+  >({
+    mutationFn: (id) => deleteAsset(id),
+    onSuccess: (_data, id) => invalidate(id),
+  });
+}
+
+export function useRegenerateAsset(id: string) {
+  const invalidate = useAssetInvalidation();
+  return useMutation<Asset, ApiError, RegenerateRequest>({
+    mutationFn: (req) => regenerateAsset(id, req),
+    onSuccess: () => invalidate(id),
   });
 }
