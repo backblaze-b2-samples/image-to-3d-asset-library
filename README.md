@@ -26,19 +26,21 @@ bucket file browser, direct-to-B2 upload, and the checked-in
 
 ## What it looks like
 
-Screenshots are captured per release. Locally, the app has four purpose-built
-screens:
+**Dashboard** — asset count, total B2 objects written, storage used, and the aggregate input→output amplification ratio, plus a storage-by-artifact-type chart and recent generations.
 
-- **Dashboard** (`/`) — asset count, total B2 objects written, storage used, and
-  the aggregate input→output **amplification ratio**, plus storage-by-artifact
-  breakdown and recent generations.
-- **Generate** (`/generate`) — upload a source image, pick an engine and
-  settings, and start a reconstruction.
-- **Library** (`/library`) — a grid of generated assets, and a per-asset detail
-  page with an **in-browser 3D viewer**, artifact table, and write-amplification
-  breakdown.
-- **Files** (`/files`) — the full-bucket explorer (browse everything in B2, not
-  just this app's output).
+![Dashboard with asset-library metrics, a storage-by-artifact chart, and recent generations](docs/images/dashboard.png)
+
+**Generate** — drop in a source image, pick an engine (TripoSR by default), texture resolution, and background removal, then start a reconstruction.
+
+![Generate page with the source-image dropzone and generation settings](docs/images/generate.png)
+
+**Library** — a grid of every generated 3D asset in the bucket, each card showing its rendered preview, engine, B2 object count, and size.
+
+![Library grid of generated 3D assets](docs/images/library.png)
+
+**Asset detail** — an in-browser 3D viewer served straight from B2, next to the write-amplification breakdown, generation metadata, the source image, and a downloadable B2 artifact table.
+
+![Asset detail page with the in-browser 3D viewer, write-amplification breakdown, and B2 artifact table](docs/images/asset-detail.png)
 
 ## Quick Start
 
