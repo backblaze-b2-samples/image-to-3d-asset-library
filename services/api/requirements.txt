@@ -19,7 +19,7 @@ PyPDF2>=3.0.0
 # loads them or downloads weights. Pinned windows on purpose — an unbounded
 # torch/transformers/hf pin is a known false-green that breaks a fresh clone.
 torch>=2.3,<2.9              # CPU wheel; MPS/CUDA auto-detected at runtime
-numpy>=1.26,<2              # ML-ecosystem compat (see prior samples)
+numpy>=2.5.2,<3              # ML-ecosystem compat (see prior samples)
 trimesh>=4.0,<5             # mesh construction + GLB/OBJ export
 PyMCubes>=0.1.4            # `mcubes`: pure-CPU marching cubes (replaces torchmcubes)
 transformers>=5.10,<6      # TripoSR image tokenizer (DINO ViT); lazy-imported
